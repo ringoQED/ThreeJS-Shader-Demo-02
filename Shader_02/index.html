@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Custom Shader Box with Texture</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+  
+  <script type="module">
+    import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+    // Vertex Shader
+    const vertexShader = `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+      }
+    `;
+
+    // Fragment Shader - wave distortion
+    const fragmentShader = `
+      uniform sampler2D uTexture;
+      uniform float uTime, waveAmplitude;
+      varying vec2 vUv;
+
+      void main() {
+        // Wave distortion
+        vec2 uv = vUv;
+        uv.x += sin( uv.y * 10.0 + uTime ) * waveAmplitude;
+        uv.y += cos( uv.x * 10.0 + uTime ) * 0.01;
+
+        // Sample texture
+        vec4 texColor = texture2D( uTexture, uv );
+
+        // Optional: Add a subtle glow or tint (not used with current texture)
+        //vec3 tint = vec3( 1.0, 0.9, 1.1 );
+        //vec3 finalColor = texColor.rgb * tint;
+
+        gl_FragColor = vec4( texColor.rgb, texColor.a );
+        
+      }
+    `;
+
+    // Scene
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    // Controls
+    const controls = new THREE.OrbitControls( camera, renderer.domElement );
+    controls.enableZoom = false;
+    controls.enablePan = false;
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    camera.position.set(2.5, 2.5, 2.5);
+    controls.update();
+
+    // Define texture loader
+    const textureLoader = new THREE.TextureLoader();
+
+    // Define texture array
+    const texArray = [
+      'aerialfog.jpg',
+      'galaxy.jpg',
+      'glassrain.jpg',
+      'UVChecker.png',
+      'wave.jpg',
+      'wood.jpg'
+    ];
+
+    // Load initial texture
+    const texture = textureLoader.load( '../image/' + texArray[4] ); 
+
+    // GUI for texture selection
+    const gui = new GUI();
+    const texFolder = gui.addFolder( 'Texture Selection' );
+    const texParams = {
+      texture: texArray[4],
+    };
+    texFolder.add( texParams, 'texture', texArray ).name( 'Material' ).onChange(( value ) => {
+      const newTexture = textureLoader.load( '../image/' + value );
+      material.uniforms.uTexture.value = newTexture;
+      material.needsUpdate = true;
+    });
+
+    // GUI for wave distortion parameters
+    const waveFolder = gui.addFolder( 'Wave Distortion' );
+    const waveParamsAmp = {
+      waveAmplitude: 0.02,
+    };
+    const waveParamsFreq = {
+      waveFrequency: 1.0,
+    };
+
+    waveFolder.add( waveParamsAmp, 'waveAmplitude', 0.0, 0.1 ).name( 'Amplitude' ).onChange(( value ) => {
+      // Update uniform
+      material.uniforms.waveAmplitude.value = value;
+      material.needsUpdate = true;
+    });
+
+    waveFolder.add( waveParamsFreq, 'waveFrequency', 0.0, 5.0 ).name( 'Frequency' ).onChange(( value ) => {
+      // Update uniform
+      material.uniforms.waveFrequency.value = value;
+      material.needsUpdate = true;
+    });
+
+
+    // Box geometry
+    const geometry = new THREE.BoxGeometry( 2, 2, 2 );
+
+    // Uniforms
+    const uniforms = {
+      uTexture: { value: texture },
+      uTime: { value: 0 },
+      waveAmplitude: { value: waveParamsAmp.waveAmplitude },
+      waveFrequency: { value: waveParamsFreq.waveFrequency },
+    };
+
+    // Material with custom shaders
+    const material = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      uniforms,
+      side: THREE.DoubleSide
+    });
+
+    // Mesh
+    const cube = new THREE.Mesh( geometry, material );
+    scene.add(cube);
+
+    // Light
+    const light1 = new THREE.DirectionalLight( 0xffffff, 2 );
+    const light2 = new THREE.DirectionalLight( 0xffffff, 2 );
+    light1.position.set = ( 1, 1, 1 );
+    light2.position.set = ( -1, 1, 1 );
+    scene.add( light1 );
+    scene.add( light2);
+
+    // Animation loop
+    const clock = new THREE.Clock();
+    function animate() {
+
+      requestAnimationFrame( animate );
+
+      uniforms.uTime.value = clock.getElapsedTime() * waveParamsFreq.waveFrequency;
+      
+      //cube.rotation.y = elapsedTime * 0.1;
+      //cube.rotation.x = elapsedTime * 0.2;
+
+      controls.update();
+      renderer.render( scene, camera );
+    }
+
+    animate();
+
+    // Handle resize
+    window.addEventListener( 'resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize( window.innerWidth, window.innerHeight );
+    });
+  </script>
+</body>
+</html>
